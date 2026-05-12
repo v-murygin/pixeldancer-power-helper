@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Daemon runs as root via launchd. Not sandboxed (only sandbox-
+         capable when bundled into a sandboxed app — this lives in a
+         Developer ID helper). Hardened runtime alone is enough for
+         notarization. -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>

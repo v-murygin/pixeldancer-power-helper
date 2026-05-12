@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vm.PixelDancerPowerHelper.daemon</string>
+
+    <!-- launchd loads BundleProgram from inside the registering app's bundle. -->
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/PixelDancerPowerHelperDaemon</string>
+
+    <!-- Mach service the daemon registers on launch; main app connects by this name. -->
+    <key>MachServices</key>
+    <dict>
+        <key>com.vm.PixelDancerPowerHelper.daemon</key>
+        <true/>
+    </dict>
+
+    <!-- Restart on crash, but throttle so a misbehaving build doesn't loop. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Run as root so we can invoke /usr/bin/pmset disablesleep. -->
+    <key>UserName</key>
+    <string>root</string>
+    <key>GroupName</key>
+    <string>wheel</string>
+
+    <!-- launchd brings us up on demand; LSUIElement-style log streaming. -->
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/var/log/com.vm.PixelDancerPowerHelper.daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/com.vm.PixelDancerPowerHelper.daemon.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
