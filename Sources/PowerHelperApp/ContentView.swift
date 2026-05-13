@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var statusRefreshTask: Task<Void, Never>?
     @State private var pingConnection: NSXPCConnection?
     @State private var updateChecker = UpdateChecker()
+    @State private var updateInstaller = UpdateInstaller()
 
     private let daemonService = SMAppService.daemon(plistName: kPixelDancerPowerHelperDaemonPlistName)
 
@@ -44,7 +45,7 @@ struct ContentView: View {
     }
 
     private func updateBanner(installed: String, latest: String, releaseURL: URL) -> some View {
-        Link(destination: releaseURL) {
+        VStack(spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.up.circle.fill")
                     .foregroundStyle(.blue)
@@ -53,21 +54,90 @@ struct ContentView: View {
                     Text("Update available — v\(latest)")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                    Text("You're on v\(installed). Click to open the release page.")
+                    Text("You're on v\(installed)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
+                updateAction(latest: latest, releaseURL: releaseURL)
+            }
+        }
+        .padding(12)
+        .background(Color.blue.opacity(0.10), in: .rect(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func updateAction(latest: String, releaseURL: URL) -> some View {
+        switch updateInstaller.state {
+        case .idle:
+            HStack(spacing: 8) {
+                Button {
+                    let dmgURL = URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
+                        ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
+                    updateInstaller.downloadAndOpen(dmgURL: dmgURL)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                        Text("Update")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Link(destination: releaseURL) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .help("Release notes on GitHub")
+            }
+
+        case .downloading(let progress):
+            HStack(spacing: 8) {
+                ProgressView(value: progress, total: 1.0)
+                    .frame(width: 120)
+                Text("\(Int(progress * 100))%")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Button("Cancel") { updateInstaller.cancel() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+
+        case .opening:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Opening…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(12)
-            .background(Color.blue.opacity(0.10), in: .rect(cornerRadius: 10))
-            .contentShape(.rect)
+
+        case .finished:
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("Drag the new helper to Applications")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .failed(let msg):
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(msg)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Button("Retry") {
+                        let dmgURL = URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
+                            ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
+                        updateInstaller.downloadAndOpen(dmgURL: dmgURL)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    Link("Open in browser", destination: releaseURL).font(.caption)
+                }
+            }
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Header

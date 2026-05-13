@@ -58,8 +58,26 @@
     "Update available — v%@" : {
       "comment" : "Update banner headline; argument is the latest version string"
     },
-    "You're on v%@. Click to open the release page." : {
-      "comment" : "Update banner detail; argument is the installed version string"
+    "You're on v%@" : {
+      "comment" : "Update banner subtitle; argument is the currently installed version"
+    },
+    "Update" : {
+      "comment" : "Primary action — download and open the new DMG"
+    },
+    "Cancel" : {
+      "comment" : "Cancel an in-progress operation"
+    },
+    "Opening…" : {
+      "comment" : "Transient status while DMG is mounting"
+    },
+    "Drag the new helper to Applications" : {
+      "comment" : "Post-download instruction"
+    },
+    "Retry" : {
+      "comment" : "Retry a failed action"
+    },
+    "Open in browser" : {
+      "comment" : "Fallback link to release page after a failed download"
     }
   },
   "version" : "1.0"
