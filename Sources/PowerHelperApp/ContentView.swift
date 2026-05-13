@@ -294,9 +294,7 @@ struct ContentView: View {
         case .idle:
             HStack(spacing: 8) {
                 Button {
-                    let dmgURL = URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
-                        ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
-                    updateInstaller.downloadAndOpen(dmgURL: dmgURL)
+                    updateInstaller.downloadAndInstall(dmgURL: dmgURL(for: latest))
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle.fill")
@@ -321,33 +319,42 @@ struct ContentView: View {
                     .buttonStyle(.bordered).controlSize(.small)
             }
 
-        case .opening:
+        case .installing:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Opening…").font(.caption).foregroundStyle(.secondary)
+                Text("Installing…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-        case .finished:
+        case .relaunching:
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("Drag the new helper to Applications")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Installed — relaunching")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
         case .failed(let msg):
             VStack(alignment: .trailing, spacing: 4) {
-                Text(msg).font(.caption2).foregroundStyle(.orange).lineLimit(2)
+                Text(msg).font(.caption2).foregroundStyle(.orange).lineLimit(3)
                 HStack(spacing: 6) {
                     Button("Retry") {
-                        let dmgURL = URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
-                            ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
-                        updateInstaller.downloadAndOpen(dmgURL: dmgURL)
+                        updateInstaller.downloadAndInstall(dmgURL: dmgURL(for: latest))
                     }
                     .buttonStyle(.borderedProminent).controlSize(.small)
                     Link("Open in browser", destination: releaseURL).font(.caption)
                 }
             }
         }
+    }
+
+    /// Versioned DMG URL with a fallback to the `latest/download` alias so
+    /// we always have something to retry against even if the exact tag URL
+    /// 404s during release propagation.
+    private func dmgURL(for latest: String) -> URL {
+        URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
+            ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
     }
 
     // MARK: - Error / footer
