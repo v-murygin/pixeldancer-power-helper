@@ -15,12 +15,16 @@ struct ContentView: View {
     @State private var lastError: String?
     @State private var statusRefreshTask: Task<Void, Never>?
     @State private var pingConnection: NSXPCConnection?
+    @State private var updateChecker = UpdateChecker()
 
     private let daemonService = SMAppService.daemon(plistName: kPixelDancerPowerHelperDaemonPlistName)
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             header
+            if case .updateAvailable(let installed, let latest, let url) = updateChecker.state {
+                updateBanner(installed: installed, latest: latest, releaseURL: url)
+            }
             statusCard
             actionsRow
             if let error = lastError {
@@ -34,6 +38,36 @@ struct ContentView: View {
             startPolling()
         }
         .onDisappear { statusRefreshTask?.cancel() }
+        .task {
+            await updateChecker.checkForUpdate()
+        }
+    }
+
+    private func updateBanner(installed: String, latest: String, releaseURL: URL) -> some View {
+        Link(destination: releaseURL) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .foregroundStyle(.blue)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Update available — v\(latest)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                    Text("You're on v\(installed). Click to open the release page.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(Color.blue.opacity(0.10), in: .rect(cornerRadius: 10))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Header
