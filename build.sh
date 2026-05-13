@@ -40,6 +40,10 @@ chmod +x "$BIN_DIR/PixelDancerPowerHelper" "$BIN_DIR/PixelDancerPowerHelperDaemo
 cp Bundle/Info.plist "$APP_DIR/Contents/Info.plist"
 cp Bundle/LaunchDaemons/com.vm.PixelDancerPowerHelper.daemon.plist "$LAUNCHD_DIR/"
 
+# App icon (Resources/AppIcon.icns referenced by CFBundleIconFile in Info.plist)
+mkdir -p "$APP_DIR/Contents/Resources"
+cp Bundle/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
+
 # PkgInfo (some macOS subsystems sniff for this)
 echo -n "APPL????" > "$APP_DIR/Contents/PkgInfo"
 
