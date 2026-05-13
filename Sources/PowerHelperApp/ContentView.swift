@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var daemonProtocolVersion: Int?
     @State private var lastError: String?
     @State private var statusRefreshTask: Task<Void, Never>?
+    @State private var pingConnection: NSXPCConnection?
 
     private let daemonService = SMAppService.daemon(plistName: kPixelDancerPowerHelperDaemonPlistName)
 
@@ -244,25 +245,35 @@ struct ContentView: View {
     }
 
     private func pingDaemon() {
+        // The XPC connection MUST outlive the asynchronous ping call. Don't
+        // invalidate it inside the reply block — the reply runs on a private
+        // queue and dropping the connection there races with delivery, so
+        // the reply handler never fires on the calling actor. Keep the
+        // connection alive in @State until the next ping replaces it.
         let connection = NSXPCConnection(
             machServiceName: kPixelDancerPowerHelperMachServiceName,
             options: .privileged
         )
         connection.remoteObjectInterface = NSXPCInterface(with: PowerHelperProtocol.self)
         connection.resume()
+
+        // Replace any previous in-flight ping connection so we don't leak.
+        let previousConnection = pingConnection
+        pingConnection = connection
+        previousConnection?.invalidate()
+
         let proxy = connection.remoteObjectProxyWithErrorHandler { error in
             DispatchQueue.main.async {
                 daemonReachable = false
                 daemonProtocolVersion = nil
             }
-            connection.invalidate()
         } as? PowerHelperProtocol
+
         proxy?.ping { version, name in
             DispatchQueue.main.async {
                 daemonReachable = true
                 daemonProtocolVersion = version
             }
-            connection.invalidate()
         }
     }
 }
