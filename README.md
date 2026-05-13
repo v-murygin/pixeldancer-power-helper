@@ -63,6 +63,27 @@ caller).
 └── build.sh                                  — Compile + assemble .app bundle
 ```
 
+## Open in Xcode (for editing UI / translations)
+
+```bash
+open Package.swift
+```
+
+Xcode opens the package, indexes both targets, lets you edit SwiftUI views
+and add resources. To build/run from Xcode pick the `PixelDancerPowerHelper`
+scheme and hit ⌘R.
+
+### Adding translations
+
+UI strings live in
+[`Sources/PowerHelperApp/Resources/Localizable.xcstrings`](Sources/PowerHelperApp/Resources/Localizable.xcstrings).
+Open it in Xcode — the Strings Catalog editor lets you add languages and fill
+in translations side by side. The English source strings (used in SwiftUI
+`Text`, `Button`, `Label`) are extracted automatically when Xcode builds.
+
+SwiftPM's resources system processes the catalog and SwiftUI looks it up via
+`Bundle.module` at runtime — no extra wiring.
+
 ## Build from source
 
 ```bash

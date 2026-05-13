@@ -1,0 +1,60 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "PixelDancer Power Helper" : {
+      "comment" : "App window title and brand name"
+    },
+    "Enables closed-lid sleep prevention for PixelDancer Agent Mode" : {
+      "comment" : "Header subtitle on main window"
+    },
+    "Helper installed and running" : {
+      "comment" : "Status when daemon is reachable"
+    },
+    "Registered — waiting for daemon to come online" : {
+      "comment" : "Status when SMAppService says enabled but daemon ping not yet received"
+    },
+    "Approval required in System Settings" : {
+      "comment" : "Status when daemon needs Login Items approval"
+    },
+    "Daemon plist not found" : {
+      "comment" : "Status when SMAppService can't locate the daemon plist"
+    },
+    "Helper not installed" : {
+      "comment" : "Status when daemon is not registered"
+    },
+    "Unknown status" : {
+      "comment" : "Fallback status when SMAppService returns unknown"
+    },
+    "Daemon protocol v%lld. Closed-lid sleep prevention works in PixelDancer Agent Mode." : {
+      "comment" : "Detail when daemon is reachable and ping succeeded"
+    },
+    "Open System Settings → Login Items & Extensions, find 'PixelDancer Power Helper Daemon', toggle it on." : {
+      "comment" : "Detail when approval is required"
+    },
+    "Click Install to register the daemon with macOS." : {
+      "comment" : "Detail when not installed"
+    },
+    "Reinstall the Power Helper — the bundled plist is missing." : {
+      "comment" : "Detail when daemon plist is missing"
+    },
+    "Daemon registered. If this status persists for more than 30 seconds, restart the Mac." : {
+      "comment" : "Detail when registered but daemon not yet online"
+    },
+    "Open System Settings" : {
+      "comment" : "Button to open System Settings → Login Items"
+    },
+    "Install" : {
+      "comment" : "Primary action — register the daemon"
+    },
+    "Uninstall" : {
+      "comment" : "Action — unregister the daemon"
+    },
+    "Refresh" : {
+      "comment" : "Action — re-check daemon status"
+    },
+    "After installing, you can quit this app — the helper runs in the background." : {
+      "comment" : "Footer hint at the bottom of the window"
+    }
+  },
+  "version" : "1.0"
+}

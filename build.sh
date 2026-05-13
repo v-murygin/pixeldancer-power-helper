@@ -44,6 +44,12 @@ cp Bundle/LaunchDaemons/com.vm.PixelDancerPowerHelper.daemon.plist "$LAUNCHD_DIR
 mkdir -p "$APP_DIR/Contents/Resources"
 cp Bundle/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 
+# SPM resource bundle (contains compiled Localizable.xcstrings → .strings/.stringsdict)
+# SPM names it `<PackageName>_<TargetName>.bundle` next to the executable.
+if [ -d "$BUILD_PATH/PixelDancerPowerHelper_PowerHelperApp.bundle" ]; then
+  cp -R "$BUILD_PATH/PixelDancerPowerHelper_PowerHelperApp.bundle" "$APP_DIR/Contents/Resources/"
+fi
+
 # PkgInfo (some macOS subsystems sniff for this)
 echo -n "APPL????" > "$APP_DIR/Contents/PkgInfo"
 

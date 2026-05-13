@@ -28,7 +28,10 @@ let package = Package(
         .executableTarget(
             name: "PowerHelperApp",
             dependencies: ["PowerHelperShared"],
-            path: "Sources/PowerHelperApp"
+            path: "Sources/PowerHelperApp",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .executableTarget(
             name: "PowerHelperDaemon",

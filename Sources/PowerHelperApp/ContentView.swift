@@ -104,35 +104,35 @@ struct ContentView: View {
 
     private var statusHeadline: String {
         if daemonReachable {
-            return "Helper installed and running"
+            return String(localized: "Helper installed and running")
         }
         switch status {
         case .enabled:
-            return "Registered — waiting for daemon to come online"
+            return String(localized: "Registered — waiting for daemon to come online")
         case .requiresApproval:
-            return "Approval required in System Settings"
+            return String(localized: "Approval required in System Settings")
         case .notFound:
-            return "Daemon plist not found"
+            return String(localized: "Daemon plist not found")
         case .notRegistered:
-            return "Helper not installed"
+            return String(localized: "Helper not installed")
         @unknown default:
-            return "Unknown status"
+            return String(localized: "Unknown status")
         }
     }
 
     private var statusDetail: String {
         if daemonReachable, let v = daemonProtocolVersion {
-            return "Daemon protocol v\(v). Closed-lid sleep prevention works in PixelDancer Agent Mode."
+            return String(localized: "Daemon protocol v\(v). Closed-lid sleep prevention works in PixelDancer Agent Mode.")
         }
         switch status {
         case .requiresApproval:
-            return "Open System Settings → Login Items & Extensions, find 'PixelDancer Power Helper Daemon', toggle it on."
+            return String(localized: "Open System Settings → Login Items & Extensions, find 'PixelDancer Power Helper Daemon', toggle it on.")
         case .notRegistered:
-            return "Click Install to register the daemon with macOS."
+            return String(localized: "Click Install to register the daemon with macOS.")
         case .notFound:
-            return "Reinstall the Power Helper — the bundled plist is missing."
+            return String(localized: "Reinstall the Power Helper — the bundled plist is missing.")
         case .enabled:
-            return "Daemon registered. If this status persists for more than 30 seconds, restart the Mac."
+            return String(localized: "Daemon registered. If this status persists for more than 30 seconds, restart the Mac.")
         @unknown default:
             return ""
         }
