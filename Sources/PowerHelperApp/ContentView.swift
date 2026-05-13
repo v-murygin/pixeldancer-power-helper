@@ -20,20 +20,41 @@ struct ContentView: View {
 
     private let daemonService = SMAppService.daemon(plistName: kPixelDancerPowerHelperDaemonPlistName)
 
+    /// Three-step progress: Installed (SMAppService registered) → Approved
+    /// (user toggled the Login Item) → Running (XPC ping succeeded).
+    private var currentStep: Int {
+        if daemonReachable { return 3 }
+        switch status {
+        case .enabled: return 2          // approved, waiting for daemon to come online
+        case .requiresApproval: return 1 // installed, needs approval
+        case .notRegistered, .notFound: return 0
+        @unknown default: return 0
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             header
+
             if case .updateAvailable(let installed, let latest, let url) = updateChecker.state {
                 updateBanner(installed: installed, latest: latest, releaseURL: url)
             }
-            statusCard
-            actionsRow
+
+            stepsRow
+
+            statusBlock
+
+            primaryActions
+
             if let error = lastError {
                 errorCard(error)
             }
+
+            Spacer(minLength: 0)
             footer
         }
         .padding(28)
+        .frame(width: 540, height: 480)
         .onAppear {
             refreshStatus()
             startPolling()
@@ -44,23 +65,221 @@ struct ContentView: View {
         }
     }
 
-    private func updateBanner(installed: String, latest: String, releaseURL: URL) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .foregroundStyle(.blue)
-                    .font(.title3)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Update available — v\(latest)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Text("You're on v\(installed)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                updateAction(latest: latest, releaseURL: releaseURL)
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "battery.100.bolt")
+                .font(.system(size: 32, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 52, height: 52)
+                .background(Color.accentColor.opacity(0.14), in: .circle)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PixelDancer Power Helper")
+                    .font(.headline)
+                Text("Enables closed-lid sleep prevention for PixelDancer Agent Mode")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
+            Spacer()
+        }
+    }
+
+    // MARK: - Stepped progress
+
+    private var stepsRow: some View {
+        HStack(spacing: 0) {
+            stepNode(index: 0, label: "Installed")
+            stepConnector(filled: currentStep > 0)
+            stepNode(index: 1, label: "Approved")
+            stepConnector(filled: currentStep > 1)
+            stepNode(index: 2, label: "Running")
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func stepNode(index: Int, label: String) -> some View {
+        let isDone = currentStep > index
+        let isCurrent = currentStep == index
+        let isRunning = index == 2 && daemonReachable
+
+        let circleFill: Color = isDone ? .green : (isCurrent ? .blue : Color.gray.opacity(0.25))
+        let circleBorder: Color = isDone || isCurrent ? .clear : Color.gray.opacity(0.4)
+
+        return VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(circleFill)
+                    .frame(width: 26, height: 26)
+                    .overlay(Circle().stroke(circleBorder, lineWidth: 1.5))
+
+                if isRunning {
+                    // Pulsing dot while daemon is alive — visual "heartbeat".
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.pulse, options: .repeating, isActive: true)
+                } else if isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                } else if isCurrent {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 8, height: 8)
+                        .symbolEffect(.pulse, options: .repeating, isActive: true)
+                }
+            }
+
+            Text(label)
+                .font(.caption2)
+                .fontWeight(isCurrent ? .semibold : .regular)
+                .foregroundStyle(isDone || isCurrent ? .primary : .secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func stepConnector(filled: Bool) -> some View {
+        Rectangle()
+            .fill(filled ? Color.green : Color.gray.opacity(0.25))
+            .frame(height: 2)
+            .padding(.bottom, 20)   // align vertically with circle centres
+    }
+
+    // MARK: - Status block
+
+    private var statusBlock: some View {
+        VStack(spacing: 6) {
+            Text(statusHeadline)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            Text(statusDetail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 440)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(statusBackgroundColor.opacity(0.10), in: .rect(cornerRadius: 10))
+    }
+
+    private var statusBackgroundColor: Color {
+        if daemonReachable { return .green }
+        switch status {
+        case .enabled: return .blue
+        case .requiresApproval: return .orange
+        case .notFound: return .red
+        case .notRegistered: return .gray
+        @unknown default: return .gray
+        }
+    }
+
+    private var statusHeadline: String {
+        if daemonReachable {
+            return String(localized: "Helper is running")
+        }
+        switch status {
+        case .enabled:
+            return String(localized: "Waiting for daemon to come online")
+        case .requiresApproval:
+            return String(localized: "Approval required")
+        case .notFound:
+            return String(localized: "Daemon plist not found")
+        case .notRegistered:
+            return String(localized: "Not installed yet")
+        @unknown default:
+            return String(localized: "Unknown status")
+        }
+    }
+
+    private var statusDetail: String {
+        if daemonReachable, let v = daemonProtocolVersion {
+            return String(localized: "Closed-lid sleep prevention is active. Protocol v\(v).")
+        }
+        switch status {
+        case .requiresApproval:
+            return String(localized: "Open System Settings → Login Items & Extensions and toggle 'PixelDancer Power Helper Daemon' on.")
+        case .notRegistered:
+            return String(localized: "Click Install to register the daemon with macOS. You'll be asked to approve it once in System Settings.")
+        case .notFound:
+            return String(localized: "Reinstall the Power Helper — the bundled plist is missing.")
+        case .enabled:
+            return String(localized: "Daemon registered. If this persists for more than 30 seconds, try Refresh or restart the Mac.")
+        @unknown default:
+            return ""
+        }
+    }
+
+    // MARK: - Actions
+
+    @ViewBuilder
+    private var primaryActions: some View {
+        HStack(spacing: 10) {
+            switch (status, daemonReachable) {
+            case (.requiresApproval, _):
+                Button {
+                    SMAppService.openSystemSettingsLoginItems()
+                } label: {
+                    Label("Open System Settings", systemImage: "gear")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+
+            case (.notRegistered, _), (.notFound, _):
+                Button {
+                    install()
+                } label: {
+                    Label("Install", systemImage: "arrow.down.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+
+            case (.enabled, _):
+                Button {
+                    uninstall()
+                } label: {
+                    Label("Uninstall", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+
+            @unknown default:
+                EmptyView()
+            }
+
+            Button {
+                refreshStatus()
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Update banner
+
+    private func updateBanner(installed: String, latest: String, releaseURL: URL) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.up.circle.fill")
+                .foregroundStyle(.blue)
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Update available — v\(latest)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("You're on v\(installed)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            updateAction(latest: latest, releaseURL: releaseURL)
         }
         .padding(12)
         .background(Color.blue.opacity(0.10), in: .rect(cornerRadius: 10))
@@ -85,204 +304,50 @@ struct ContentView: View {
                 .controlSize(.small)
 
                 Link(destination: releaseURL) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "info.circle").foregroundStyle(.secondary)
                 }
                 .help("Release notes on GitHub")
             }
 
         case .downloading(let progress):
             HStack(spacing: 8) {
-                ProgressView(value: progress, total: 1.0)
-                    .frame(width: 120)
+                ProgressView(value: progress, total: 1.0).frame(width: 120)
                 Text("\(Int(progress * 100))%")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 Button("Cancel") { updateInstaller.cancel() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(.bordered).controlSize(.small)
             }
 
         case .opening:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Opening…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("Opening…").font(.caption).foregroundStyle(.secondary)
             }
 
         case .finished:
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("Drag the new helper to Applications")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
         case .failed(let msg):
             VStack(alignment: .trailing, spacing: 4) {
-                Text(msg)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .lineLimit(2)
+                Text(msg).font(.caption2).foregroundStyle(.orange).lineLimit(2)
                 HStack(spacing: 6) {
                     Button("Retry") {
                         let dmgURL = URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/download/v\(latest)/PixelDancerPowerHelper.dmg")
                             ?? URL(string: "https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg")!
                         updateInstaller.downloadAndOpen(dmgURL: dmgURL)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent).controlSize(.small)
                     Link("Open in browser", destination: releaseURL).font(.caption)
                 }
             }
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "battery.100.bolt")
-                .font(.system(size: 44))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 64, height: 64)
-                .background(Color.accentColor.opacity(0.12), in: .circle)
-            Text("PixelDancer Power Helper")
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text("Enables closed-lid sleep prevention for PixelDancer Agent Mode")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - Status card
-
-    private var statusCard: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: statusIcon)
-                    .foregroundStyle(statusTint)
-                    .font(.title3)
-                Text(statusHeadline)
-                    .font(.headline)
-                Spacer()
-            }
-            if !statusDetail.isEmpty {
-                HStack {
-                    Text(statusDetail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }
-        }
-        .padding(16)
-        .background(statusTint.opacity(0.10), in: .rect(cornerRadius: 10))
-    }
-
-    private var statusIcon: String {
-        if daemonReachable { return "checkmark.seal.fill" }
-        switch status {
-        case .enabled: return "ellipsis.circle.fill"
-        case .requiresApproval: return "exclamationmark.circle.fill"
-        case .notFound: return "xmark.octagon.fill"
-        case .notRegistered: return "tray.and.arrow.down"
-        @unknown default: return "questionmark.circle"
-        }
-    }
-
-    private var statusTint: Color {
-        if daemonReachable { return .green }
-        switch status {
-        case .enabled: return .blue
-        case .requiresApproval: return .orange
-        case .notFound: return .red
-        case .notRegistered: return .secondary
-        @unknown default: return .secondary
-        }
-    }
-
-    private var statusHeadline: String {
-        if daemonReachable {
-            return String(localized: "Helper installed and running")
-        }
-        switch status {
-        case .enabled:
-            return String(localized: "Registered — waiting for daemon to come online")
-        case .requiresApproval:
-            return String(localized: "Approval required in System Settings")
-        case .notFound:
-            return String(localized: "Daemon plist not found")
-        case .notRegistered:
-            return String(localized: "Helper not installed")
-        @unknown default:
-            return String(localized: "Unknown status")
-        }
-    }
-
-    private var statusDetail: String {
-        if daemonReachable, let v = daemonProtocolVersion {
-            return String(localized: "Daemon protocol v\(v). Closed-lid sleep prevention works in PixelDancer Agent Mode.")
-        }
-        switch status {
-        case .requiresApproval:
-            return String(localized: "Open System Settings → Login Items & Extensions, find 'PixelDancer Power Helper Daemon', toggle it on.")
-        case .notRegistered:
-            return String(localized: "Click Install to register the daemon with macOS.")
-        case .notFound:
-            return String(localized: "Reinstall the Power Helper — the bundled plist is missing.")
-        case .enabled:
-            return String(localized: "Daemon registered. If this status persists for more than 30 seconds, restart the Mac.")
-        @unknown default:
-            return ""
-        }
-    }
-
-    // MARK: - Actions
-
-    private var actionsRow: some View {
-        HStack(spacing: 12) {
-            if status == .requiresApproval {
-                Button {
-                    SMAppService.openSystemSettingsLoginItems()
-                } label: {
-                    Label("Open System Settings", systemImage: "gear")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-            } else if status == .notRegistered || status == .notFound {
-                Button {
-                    install()
-                } label: {
-                    Label("Install", systemImage: "arrow.down.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-            } else if status == .enabled || daemonReachable {
-                Button {
-                    uninstall()
-                } label: {
-                    Label("Uninstall", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-
-            Button {
-                refreshStatus()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-        }
-    }
-
-    // MARK: - Error card
+    // MARK: - Error / footer
 
     private func errorCard(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
@@ -292,22 +357,20 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(10)
         .background(Color.orange.opacity(0.10), in: .rect(cornerRadius: 8))
     }
-
-    // MARK: - Footer
 
     private var footer: some View {
         HStack {
             Text("After installing, you can quit this app — the helper runs in the background.")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
         }
     }
 
-    // MARK: - Status / actions
+    // MARK: - Status / actions wiring
 
     private func refreshStatus() {
         status = daemonService.status
@@ -329,7 +392,6 @@ struct ContentView: View {
         do {
             try daemonService.register()
             refreshStatus()
-            // If the install requires approval, point the user to System Settings.
             if daemonService.status == .requiresApproval {
                 SMAppService.openSystemSettingsLoginItems()
             }
@@ -349,11 +411,6 @@ struct ContentView: View {
     }
 
     private func pingDaemon() {
-        // The XPC connection MUST outlive the asynchronous ping call. Don't
-        // invalidate it inside the reply block — the reply runs on a private
-        // queue and dropping the connection there races with delivery, so
-        // the reply handler never fires on the calling actor. Keep the
-        // connection alive in @State until the next ping replaces it.
         let connection = NSXPCConnection(
             machServiceName: kPixelDancerPowerHelperMachServiceName,
             options: .privileged
@@ -361,19 +418,18 @@ struct ContentView: View {
         connection.remoteObjectInterface = NSXPCInterface(with: PowerHelperProtocol.self)
         connection.resume()
 
-        // Replace any previous in-flight ping connection so we don't leak.
         let previousConnection = pingConnection
         pingConnection = connection
         previousConnection?.invalidate()
 
-        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+        let proxy = connection.remoteObjectProxyWithErrorHandler { _ in
             DispatchQueue.main.async {
                 daemonReachable = false
                 daemonProtocolVersion = nil
             }
         } as? PowerHelperProtocol
 
-        proxy?.ping { version, name in
+        proxy?.ping { version, _ in
             DispatchQueue.main.async {
                 daemonReachable = true
                 daemonProtocolVersion = version

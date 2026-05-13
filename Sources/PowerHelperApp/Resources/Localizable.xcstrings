@@ -7,14 +7,41 @@
     "Enables closed-lid sleep prevention for PixelDancer Agent Mode" : {
       "comment" : "Header subtitle on main window"
     },
-    "Helper installed and running" : {
-      "comment" : "Status when daemon is reachable"
+    "Helper is running" : {
+      "comment" : "Status when daemon ping succeeded"
     },
-    "Registered — waiting for daemon to come online" : {
+    "Waiting for daemon to come online" : {
       "comment" : "Status when SMAppService says enabled but daemon ping not yet received"
     },
-    "Approval required in System Settings" : {
+    "Approval required" : {
       "comment" : "Status when daemon needs Login Items approval"
+    },
+    "Not installed yet" : {
+      "comment" : "Status when daemon hasn't been registered"
+    },
+    "Installed" : {
+      "comment" : "Stepped progress label — daemon registered with macOS"
+    },
+    "Approved" : {
+      "comment" : "Stepped progress label — user toggled Login Item on"
+    },
+    "Running" : {
+      "comment" : "Stepped progress label — daemon process is alive and responding"
+    },
+    "Closed-lid sleep prevention is active. Protocol v%lld." : {
+      "comment" : "Status detail when daemon is reachable; arg is protocol version"
+    },
+    "Open System Settings → Login Items & Extensions and toggle 'PixelDancer Power Helper Daemon' on." : {
+      "comment" : "Status detail when approval is required (simplified)"
+    },
+    "Click Install to register the daemon with macOS. You'll be asked to approve it once in System Settings." : {
+      "comment" : "Status detail when not installed"
+    },
+    "Daemon registered. If this persists for more than 30 seconds, try Refresh or restart the Mac." : {
+      "comment" : "Status detail when registered but daemon not online yet"
+    },
+    "PixelDancer Power Helper Help" : {
+      "comment" : "Help menu entry"
     },
     "Daemon plist not found" : {
       "comment" : "Status when SMAppService can't locate the daemon plist"

@@ -19,12 +19,18 @@ struct PowerHelperApp: App {
     var body: some Scene {
         Window("PixelDancer Power Helper", id: "main") {
             ContentView()
-                .frame(width: 520, height: 460)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
         .commands {
+            // Drop File menu (single-window utility, no documents).
             CommandGroup(replacing: .newItem) { }
+            // Standard Help command pointing at the GitHub repo so the
+            // menu bar has at least one app-specific entry.
+            CommandGroup(replacing: .help) {
+                Link("PixelDancer Power Helper Help",
+                     destination: URL(string: "https://github.com/v-murygin/pixeldancer-power-helper#readme")!)
+            }
         }
     }
 }
