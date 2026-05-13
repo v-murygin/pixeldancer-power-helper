@@ -50,11 +50,10 @@ struct ContentView: View {
                 errorCard(error)
             }
 
-            Spacer(minLength: 0)
             footer
         }
         .padding(28)
-        .frame(width: 540, height: 480)
+        .frame(width: 540)
         .onAppear {
             refreshStatus()
             startPolling()
@@ -219,38 +218,8 @@ struct ContentView: View {
     @ViewBuilder
     private var primaryActions: some View {
         HStack(spacing: 10) {
-            switch (status, daemonReachable) {
-            case (.requiresApproval, _):
-                Button {
-                    SMAppService.openSystemSettingsLoginItems()
-                } label: {
-                    Label("Open System Settings", systemImage: "gear")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-
-            case (.notRegistered, _), (.notFound, _):
-                Button {
-                    install()
-                } label: {
-                    Label("Install", systemImage: "arrow.down.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-
-            case (.enabled, _):
-                Button {
-                    uninstall()
-                } label: {
-                    Label("Uninstall", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-
-            @unknown default:
-                EmptyView()
-            }
-
+            Spacer()
+            primaryActionButton
             Button {
                 refreshStatus()
             } label: {
@@ -258,8 +227,42 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
-
             Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var primaryActionButton: some View {
+        switch (status, daemonReachable) {
+        case (.requiresApproval, _):
+            Button {
+                SMAppService.openSystemSettingsLoginItems()
+            } label: {
+                Label("Open System Settings", systemImage: "gear")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+
+        case (.notRegistered, _), (.notFound, _):
+            Button {
+                install()
+            } label: {
+                Label("Install", systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+
+        case (.enabled, _):
+            Button {
+                uninstall()
+            } label: {
+                Label("Uninstall", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+
+        @unknown default:
+            EmptyView()
         }
     }
 
@@ -367,7 +370,21 @@ struct ContentView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
+            Text(appVersionLabel)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
         }
+    }
+
+    /// "v1.0.5 (6)" — short version + build number from Info.plist, surfaced
+    /// in the footer so users (and us, in screenshots) know which build is
+    /// running without opening About.
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "v\(short) (\(build))"
     }
 
     // MARK: - Status / actions wiring
