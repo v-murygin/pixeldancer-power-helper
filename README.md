@@ -94,42 +94,74 @@ Produces an unsigned `build/PixelDancer Power Helper.app`. For redistribution
 you need to sign with a Developer ID Application certificate and notarize
 through Apple — see *Sign + Notarize* below.
 
-## Sign + Notarize (for maintainers)
+## Releasing (maintainers)
+
+Releases are fully automated via [`.github/workflows/release.yml`](.github/workflows/release.yml).
+To cut a release:
 
 ```bash
-# 1. Sign the daemon executable first (inner)
-codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: <NAME> (<TEAM_ID>)" \
-  --entitlements Entitlements/daemon.entitlements \
-  "build/PixelDancer Power Helper.app/Contents/MacOS/PixelDancerPowerHelperDaemon"
+# 1. Bump CFBundleShortVersionString + CFBundleVersion in Bundle/Info.plist
+# 2. Commit and push
+git commit -am "chore: bump to v1.0.X"
+git push
 
-# 2. Sign the GUI app (outer)
-codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: <NAME> (<TEAM_ID>)" \
-  --entitlements Entitlements/app.entitlements \
-  "build/PixelDancer Power Helper.app"
-
-# 3. Verify
-codesign -dv --verbose=4 "build/PixelDancer Power Helper.app"
-
-# 4. Zip + notarize
-ditto -c -k --keepParent "build/PixelDancer Power Helper.app" "build/PowerHelper.zip"
-xcrun notarytool submit "build/PowerHelper.zip" \
-  --apple-id "<APPLE_ID>" --team-id "<TEAM_ID>" \
-  --password "<APP_SPECIFIC_PASSWORD>" --wait
-
-# 5. Staple
-xcrun stapler staple "build/PixelDancer Power Helper.app"
-
-# 6. Build DMG
-hdiutil create -volname "PixelDancer Power Helper" \
-  -srcfolder "build/PixelDancer Power Helper.app" \
-  -ov -format UDZO "build/PixelDancerPowerHelper-1.0.0.dmg"
+# 3. Tag and push the tag — this triggers CI
+git tag -a v1.0.X -m "v1.0.X"
+git push origin v1.0.X
 ```
 
-Then upload the DMG as a Release asset. PixelDancer's in-app installer
-fetches `https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg`
-— filename must match exactly.
+CI then:
+
+1. Verifies the tag version matches `Info.plist`
+2. Builds, signs daemon + app, notarizes, staples
+3. Builds DMG, signs, notarizes, staples
+4. Runs `spctl --assess` for Gatekeeper sanity
+5. Publishes a GitHub Release with the DMG attached and auto-generated notes
+
+PixelDancer's in-app installer pulls
+`https://github.com/v-murygin/pixeldancer-power-helper/releases/latest/download/PixelDancerPowerHelper.dmg`
+— the workflow always uploads the asset with that exact filename.
+
+### Required secrets (one-time setup)
+
+`Settings → Secrets and variables → Actions` on GitHub:
+
+| Secret | What it is |
+|---|---|
+| `DEVELOPER_ID_CERT_P12` | base64 of `.p12` export of the "Developer ID Application" cert + private key |
+| `DEVELOPER_ID_CERT_PASSWORD` | password used during the `.p12` export |
+| `APPLE_ID` | Apple ID email used for notarization |
+| `APPLE_TEAM_ID` | 10-character team ID (`S5W3985ZD8`) |
+| `APPLE_APP_PASSWORD` | app-specific password from [appleid.apple.com](https://appleid.apple.com) |
+
+#### Exporting the cert
+
+1. **Keychain Access** → *My Certificates* → right-click *Developer ID
+   Application: Vladislav Murygin (S5W3985ZD8)* → **Export** → save as
+   `dev-id.p12` with a strong password.
+2. base64-encode for the secret:
+   ```bash
+   base64 -i dev-id.p12 | pbcopy
+   ```
+3. Paste the result into the `DEVELOPER_ID_CERT_P12` secret on GitHub.
+4. Paste the export password into `DEVELOPER_ID_CERT_PASSWORD`.
+5. Delete the local `dev-id.p12` once both secrets are saved.
+
+The `gh` CLI can set them in one go:
+
+```bash
+gh secret set DEVELOPER_ID_CERT_P12 < <(base64 -i dev-id.p12)
+gh secret set DEVELOPER_ID_CERT_PASSWORD     # prompts for the value
+gh secret set APPLE_ID --body "vl.murygin@gmail.com"
+gh secret set APPLE_TEAM_ID --body "S5W3985ZD8"
+gh secret set APPLE_APP_PASSWORD             # prompts for the value
+```
+
+### Manual fallback (for emergencies)
+
+If CI is broken and you need to cut a release locally, the same flow runs
+by hand. See git history for the previous manual workflow text, or just
+read the steps inside `release.yml` — it's a literal translation.
 
 ## XPC contract
 

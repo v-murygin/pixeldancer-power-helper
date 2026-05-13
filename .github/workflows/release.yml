@@ -1,0 +1,163 @@
+name: Release
+
+# Tag-driven release. Push a tag like `v1.0.10` and this workflow:
+#   1. Builds the .app via build.sh
+#   2. Signs the daemon (inner) then the app (outer) with Developer ID
+#   3. Submits the .app for Apple notarization and staples the ticket
+#   4. Builds the DMG with an /Applications symlink
+#   5. Signs + notarizes + staples the DMG
+#   6. Verifies Gatekeeper acceptance with `spctl --assess`
+#   7. Publishes a GitHub Release with the DMG attached
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   DEVELOPER_ID_CERT_P12       — base64 of the .p12 export of the
+#                                 "Developer ID Application" cert + private key
+#   DEVELOPER_ID_CERT_PASSWORD  — password used when exporting the .p12
+#   APPLE_ID                    — Apple ID email used by App Store Connect
+#   APPLE_TEAM_ID               — 10-char team ID (S5W3985ZD8)
+#   APPLE_APP_PASSWORD          — app-specific password from appleid.apple.com
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sanity-check tag matches Info.plist
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Bundle/Info.plist)
+          echo "Tag: v$TAG · Info.plist: $PLIST_VERSION"
+          if [ "$TAG" != "$PLIST_VERSION" ]; then
+            echo "::error::Tag v$TAG does not match Info.plist CFBundleShortVersionString $PLIST_VERSION"
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+
+          # Decode the cert and import into a fresh temp keychain. The
+          # `-A` flag allows codesign to use it without per-invocation
+          # prompts. set-key-partition-list grants Apple tooling access.
+          echo "$CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Verify the identity is visible to codesign
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          # Wipe the decoded p12 from disk immediately
+          rm -f "$CERT_PATH"
+
+      - name: Build helper
+        run: ./build.sh
+
+      - name: Sign daemon and app
+        run: |
+          set -euo pipefail
+          IDENTITY="Developer ID Application: Vladislav Murygin (S5W3985ZD8)"
+          APP="build/PixelDancer Power Helper.app"
+          DAEMON="$APP/Contents/MacOS/PixelDancerPowerHelperDaemon"
+
+          codesign --force --options runtime --timestamp \
+            --sign "$IDENTITY" \
+            --entitlements Entitlements/daemon.entitlements \
+            "$DAEMON"
+
+          codesign --force --options runtime --timestamp \
+            --sign "$IDENTITY" \
+            --entitlements Entitlements/app.entitlements \
+            "$APP"
+
+      - name: Notarize and staple .app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP="build/PixelDancer Power Helper.app"
+
+          ditto -c -k --keepParent "$APP" build/PowerHelper.zip
+
+          xcrun notarytool submit build/PowerHelper.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          xcrun stapler staple "$APP"
+
+      - name: Build DMG
+        run: |
+          set -euo pipefail
+          rm -rf build/dmg-staging
+          mkdir -p build/dmg-staging
+          cp -R "build/PixelDancer Power Helper.app" build/dmg-staging/
+          ln -s /Applications build/dmg-staging/Applications
+
+          hdiutil create -volname "PixelDancer Power Helper" \
+            -srcfolder build/dmg-staging \
+            -ov -format UDZO \
+            build/PixelDancerPowerHelper.dmg
+
+      - name: Sign, notarize, staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          IDENTITY="Developer ID Application: Vladislav Murygin (S5W3985ZD8)"
+          DMG="build/PixelDancerPowerHelper.dmg"
+
+          codesign --force --sign "$IDENTITY" --timestamp "$DMG"
+
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          xcrun stapler staple "$DMG"
+
+      - name: Gatekeeper sanity check
+        run: spctl --assess --type install -vv build/PixelDancerPowerHelper.dmg
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: PixelDancer Power Helper ${{ github.ref_name }}
+          files: build/PixelDancerPowerHelper.dmg
+          generate_release_notes: true
+          fail_on_unmatched_files: true
